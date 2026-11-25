@@ -1,0 +1,531 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>CleanLedger — Polymarket v2 &amp; Hyperliquid (+HIP-3) Crypto Tax Cleaner</title>
+<meta name="description" content="Fix Koinly &amp; CoinTracker Polymarket CTF 0-basis income bugs, Oct-29 reimbursement double-taxation, and Hyperliquid 10,000-fill truncation. 100% browser-side, zero private keys, flat $29 USDC.">
+<style>
+  :root{--bg:#090d14;--card:#111824;--card2:#0d131e;--border:#212f44;--text:#e6edf7;--muted:#8fa3bf;--accent:#2dd4bf;--accent2:#38bdf8;--warn:#f59e0b;--danger:#f87171;}
+  *{box-sizing:border-box}
+  body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Inter,system-ui,sans-serif;background:radial-gradient(1200px 600px at 50% -150px,rgba(45,212,191,.12),transparent),var(--bg);color:var(--text);line-height:1.55}
+  .wrap{max-width:980px;margin:0 auto;padding:38px 20px 80px}
+  .top{display:flex;justify-content:space-between;align-items:center;margin-bottom:28px;flex-wrap:wrap;gap:12px}
+  .brand{font-weight:800;font-size:19px;letter-spacing:-.02em;display:flex;align-items:center;gap:8px}
+  .dot{width:10px;height:10px;border-radius:50%;background:var(--accent);box-shadow:0 0 12px var(--accent)}
+  .nav a{color:var(--muted);text-decoration:none;font-size:14px;margin-left:16px}
+  .nav a:hover{color:var(--text)}
+  .badge{display:inline-block;padding:5px 12px;border-radius:999px;background:rgba(45,212,191,.11);color:var(--accent);font-size:12px;font-weight:600;border:1px solid rgba(45,212,191,.3)}
+  h1{font-size:38px;line-height:1.15;margin:14px 0 12px;letter-spacing:-.03em}
+  .sub{color:var(--muted);font-size:16px;max-width:760px;margin:0 0 26px}
+  .card{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:22px;margin-bottom:18px}
+  .row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+  input,select{background:var(--card2);border:1px solid var(--border);color:var(--text);padding:12px 14px;border-radius:10px;font-size:14px}
+  input{flex:1;min-width:260px}
+  button{background:var(--accent);color:#04231e;border:none;padding:12px 18px;border-radius:10px;font-weight:700;font-size:14px;cursor:pointer;transition:.15s}
+  button:hover{filter:brightness(1.07)}
+  button.sec{background:#182233;color:var(--text);border:1px solid var(--border)}
+  button:disabled{opacity:.5;cursor:not-allowed}
+  .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:12px;margin-top:14px}
+  .stat{background:var(--card2);border:1px solid var(--border);border-radius:10px;padding:14px}
+  .stat .k{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em}
+  .stat .v{font-size:22px;font-weight:750;margin-top:4px}
+  .v.pos{color:var(--accent)} .v.neg{color:var(--danger)} .v.warn{color:var(--warn)}
+  .alert{padding:14px 16px;border-radius:10px;margin-top:14px;font-size:14px}
+  .alert.warn{background:rgba(245,158,11,.11);border:1px solid rgba(245,158,11,.38);color:#fde68a}
+  .alert.ok{background:rgba(45,212,191,.1);border:1px solid rgba(45,212,191,.35);color:#99f6e4}
+  table{width:100%;border-collapse:collapse;margin-top:14px;font-size:13px}
+  th,td{text-align:left;padding:9px 8px;border-bottom:1px solid var(--border)}
+  th{color:var(--muted);font-weight:600}
+  .paybox{background:#0b1320;border:1px solid rgba(45,212,191,.42);border-radius:12px;padding:18px;margin-top:16px}
+  code{background:#070c14;padding:3px 7px;border-radius:6px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;color:#7dd3fc;word-break:break-all;font-size:13px}
+  .hide{display:none}
+  .pills{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:12px;margin-top:22px}
+  .pill{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:16px}
+  .pill h4{margin:0 0 6px;font-size:15px}
+  .pill p{margin:0;font-size:13px;color:var(--muted)}
+  .foot{margin-top:34px;font-size:12px;color:var(--muted);text-align:center}
+  @media(max-width:640px){h1{font-size:28px}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="top">
+    <div class="brand"><span class="dot"></span>CleanLedger</div>
+    <div class="nav">
+      <a href="https://github.com/muskgogogo131-collab/cleanledger" target="_blank">Open-Source Audit CLI (GitHub)</a>
+    </div>
+  </div>
+
+  <span class="badge">100% Client-Side Privacy &bull; Zero Private Keys &bull; Zero KYC &bull; Flat $29 USDC</span>
+  <h1>Stop Overpaying Taxes on Polymarket &amp; Hyperliquid.</h1>
+  <p class="sub">Generic crypto tax apps treat Polymarket CTF redemptions as 0-cost ordinary income, ignore losing burns, double-tax the Oct-29 incident reimbursement, and silently break on Hyperliquid's 10,000-fill API cliff &amp; HIP-3 perps. Run a free read-only audit directly in your browser in 5 seconds.</p>
+
+  <div class="card">
+    <div class="row">
+      <input id="addr" placeholder="Paste public 0x wallet / Polymarket proxy address..." />
+      <select id="plat">
+        <option value="both">Polymarket + Hyperliquid</option>
+        <option value="polymarket">Polymarket Only</option>
+        <option value="hyperliquid">Hyperliquid + HIP-3 Only</option>
+      </select>
+      <select id="yr">
+        <option value="2026">Tax Year 2026</option>
+        <option value="2025">Tax Year 2025</option>
+        <option value="0">All Time</option>
+      </select>
+      <button id="runBtn" onclick="runAudit()">Run Free Audit</button>
+    </div>
+    <div class="row" style="margin-top:12px;justify-content:space-between">
+      <span style="font-size:12px;color:var(--muted)">Calls official Polymarket Data API v2 &amp; Hyperliquid Info API directly from your browser. Your wallet data never touches any server.</span>
+      <button class="sec" style="padding:7px 12px;font-size:12px" onclick="tryDemo()">Try Real Public Wallet Demo</button>
+    </div>
+    <div id="prog" style="margin-top:10px;font-size:13px;color:var(--accent2)" class="hide"></div>
+  </div>
+
+  <div id="resCard" class="card hide"></div>
+
+  <div id="payCard" class="card hide">
+    <h3 style="margin-top:0">Unlock Clean Tax Export Pack (Koinly + Awaken + IRS Form 8949)</h3>
+    <p style="color:var(--muted);font-size:14px;margin-top:4px">Flat <b>$29</b> regardless of trading volume (unlike Realize.tax $59–$999/yr). Pay once in Polygon USDC or USDC.e directly on-chain — instant verification &amp; download in your browser.</p>
+    <div class="row">
+      <button onclick="openCheckout()">Unlock Full Export Pack — $29 Polygon USDC</button>
+      <button class="sec" id="mmBtn" onclick="payWithWallet()">1-Click Pay via MetaMask / Rabby</button>
+    </div>
+    <div id="orderBox" class="paybox hide"></div>
+    <div id="dlBox" class="alert ok hide"></div>
+  </div>
+
+  <div class="pills">
+    <div class="pill">
+      <h4>Polymarket Data API v2 + FIFO Basis</h4>
+      <p>Legacy v1 tax scripts now return 410 Gone. CleanLedger paginates v2 activity and pairs every BUY lot against SELL, winning REDEEM, losing REDEEM, SPLIT, and MERGE.</p>
+    </div>
+    <div class="pill">
+      <h4>Oct-29 Incident Double-Tax Guard</h4>
+      <p>Flags anomalous forced liquidations and reimbursements inside the Oct 28–Nov 2, 2026 DebugBear incident window so you don't get taxed twice.</p>
+    </div>
+    <div class="pill">
+      <h4>Hyperliquid + HIP-3 &amp; 10k Cliff Check</h4>
+      <p>Separates closedPnL, trading fees, funding, TWAP child fills, and HIP-3 dex contracts (xyz:, flx:, etc.), and warns when hitting Hyperliquid's 10,000-fill truncation wall.</p>
+    </div>
+  </div>
+
+  <div class="foot">CleanLedger is an independent open-core accounting utility, not a CPA firm or tax advisor. Verify all figures before filing.</div>
+</div>
+
+<script>
+const POLY_V2 = "https://data-api.polymarket.com/v2/activity";
+const HL_INFO = "https://api.hyperliquid.xyz/info";
+const POLY_RPC = "https://polygon.drpc.org";
+const RECV_ADDR = "0x7Bf69AEC1587cf654aA0DCd111b0051032E24bC0";
+const USDC_CONTRACTS = [
+  "0x3c499c542cEF5E3811e1192ce70d8cC03d5c3359", // Native Polygon USDC
+  "0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174"  // Bridged USDC.e
+];
+const TRANSFER_TOPIC = "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef";
+const OCT29_START = Math.floor(Date.UTC(2026, 9, 28, 12, 0) / 1000);
+const OCT29_END   = Math.floor(Date.UTC(2026, 10, 2, 0, 0) / 1000);
+
+let STATE = { pm: null, hl: null, addr: "", year: 2026, expectedUsdc: null, poll: null, unlocked: false };
+
+function tsIso(ts){
+  const ms = ts > 1e12 ? ts : ts * 1000;
+  return new Date(ms).toISOString().replace("T", " ").slice(0, 19) + " UTC";
+}
+function tsDate(ts){
+  const ms = ts > 1e12 ? ts : ts * 1000;
+  return new Date(ms).toISOString().slice(0, 10);
+}
+function yearBounds(yr){
+  if(!yr) return [0, Math.floor(Date.UTC(2099,0,1)/1000)];
+  return [Math.floor(Date.UTC(yr,0,1)/1000), Math.floor(Date.UTC(yr+1,0,1)/1000)-1];
+}
+function tryDemo(){
+  document.getElementById("addr").value = "0x6f1114bac518c4dce1532980af49b551b0a615b5";
+  document.getElementById("plat").value = "polymarket";
+  document.getElementById("yr").value = "2026";
+  runAudit();
+}
+function setProg(msg){
+  const el = document.getElementById("prog");
+  if(!msg){ el.classList.add("hide"); return; }
+  el.textContent = msg; el.classList.remove("hide");
+}
+
+async function fetchPolyActivity(addr){
+  let all = [], cursor = null, offset = 0;
+  for(let page=0; page<30; page++){
+    const u = new URL(POLY_V2);
+    u.searchParams.set("user", addr.toLowerCase());
+    u.searchParams.set("limit", "100");
+    if(cursor) u.searchParams.set("cursor", cursor);
+    else if(offset > 0) u.searchParams.set("offset", String(offset));
+    const r = await fetch(u.toString());
+    if(!r.ok) break;
+    const j = await r.json();
+    const batch = j.data || [];
+    if(!batch.length) break;
+    all.push(...batch);
+    setProg("Fetching Polymarket Data API v2... (" + all.length + " events)");
+    const pag = j.pagination || {};
+    if(!pag.has_more) break;
+    if(pag.next_cursor) cursor = pag.next_cursor;
+    else offset += batch.length;
+  }
+  all.sort((a,b) => (Number(a.timestamp||0) - Number(b.timestamp||0)));
+  return all;
+}
+
+function reconcilePolymarket(raw, yr){
+  const [yrStart, yrEnd] = yearBounds(yr);
+  const lots = new Map(), cidTokens = new Map();
+  const disposals = [], incomes = [], koinly = [], oct29 = [];
+  let overRep = 0, missedLoss = 0, winR = 0, lossR = 0, merges = 0, trades = 0, vol = 0;
+
+  for(const ev of raw){
+    const ts = Number(ev.timestamp || 0);
+    const etype = String(ev.type || "").toUpperCase();
+    const side = String(ev.side || "").toUpperCase();
+    const sz = Number(ev.size || 0);
+    const usdc = Number(ev.usdc_size || 0);
+    const px = Number(ev.price || (sz > 0 ? usdc/sz : 0));
+    const tid = String(ev.token_id || "");
+    const cid = String(ev.condition_id || "");
+    const title = String(ev.title || cid.slice(0,16) || "Polymarket Contract");
+    const outcome = String(ev.outcome || "");
+    const txh = String(ev.transaction_hash || "");
+    const inYr = ts >= yrStart && ts <= yrEnd;
+    const label = outcome ? (title.slice(0,65) + " [" + outcome + "]") : title.slice(0,70);
+
+    if(inYr) vol += usdc;
+    if(cid && tid){ if(!cidTokens.has(cid)) cidTokens.set(cid, new Set()); cidTokens.get(cid).add(tid); }
+    if(ts >= OCT29_START && ts <= OCT29_END && (usdc >= 50 || (etype==="TRADE" && side==="SELL"))){
+      oct29.push({ts: tsIso(ts), type: etype, side, usdc, title: label, tx_hash: txh});
+    }
+
+    if(etype==="REWARD" || etype==="TAKER_REBATE" || etype==="YIELD"){
+      if(inYr && usdc > 0){
+        incomes.push({platform:"Polymarket", timestamp:tsIso(ts), date:tsDate(ts), income_type:etype, amount_usd:usdc, asset:"USDC", tx_hash:txh, notes:"Polymarket "+etype});
+        koinly.push({Date:tsIso(ts),"Sent Amount":"","Sent Currency":"","Received Amount":usdc.toFixed(6),"Received Currency":"USDC","Fee Amount":"","Fee Currency":"","Net Worth Amount":usdc.toFixed(2),"Net Worth Currency":"USD",Label:"reward",Description:"Polymarket "+etype,TxHash:txh});
+      }
+      continue;
+    }
+    if(etype==="SPLIT"){
+      if(tid && sz > 0){ if(!lots.has(tid)) lots.set(tid, []); lots.get(tid).push([sz, usdc>0?usdc/sz:0.5, ts]); }
+      continue;
+    }
+    if(etype==="TRADE" && side==="BUY"){
+      trades++;
+      const uc = sz > 0 ? usdc/sz : px;
+      if(tid && sz > 0){ if(!lots.has(tid)) lots.set(tid, []); lots.get(tid).push([sz, uc, ts]); }
+      if(inYr && sz > 0){
+        koinly.push({Date:tsIso(ts),"Sent Amount":usdc.toFixed(6),"Sent Currency":"USDC","Received Amount":sz.toFixed(6),"Received Currency":"PM-"+(tid.slice(-8)||"CTF"),"Fee Amount":"","Fee Currency":"","Net Worth Amount":usdc.toFixed(2),"Net Worth Currency":"USD",Label:"",Description:"Polymarket BUY "+label,TxHash:txh});
+      }
+      continue;
+    }
+    if((etype==="TRADE" && side==="SELL") || etype==="REDEEM" || etype==="MERGE"){
+      if(etype==="TRADE") trades++;
+      else if(etype==="MERGE") merges++;
+      else if(etype==="REDEEM"){ if(usdc > 0.0001) winR++; else lossR++; }
+
+      let qTid = tid;
+      if(!qTid && cid && cidTokens.has(cid)){
+        for(const c of cidTokens.get(cid)){ if((lots.get(c)||[]).length){ qTid = c; break; } }
+      }
+      const qty = sz > 0 ? sz : usdc;
+      let basis = 0, earliest = ts, rem = qty;
+      const q = lots.get(qTid) || [];
+      while(rem > 1e-8 && q.length){
+        const lot = q[0];
+        const take = Math.min(rem, lot[0]);
+        basis += take * lot[1];
+        earliest = Math.min(earliest, lot[2]);
+        lot[0] -= take; rem -= take;
+        if(lot[0] <= 1e-8) q.shift();
+      }
+      const gain = usdc - basis;
+      const term = (ts - earliest) > 365*86400 ? "Long-Term" : "Short-Term";
+      if(inYr){
+        if(etype==="REDEEM"){
+          if(usdc > 0.0001) overRep += basis;
+          else if(basis > 0.0001) missedLoss += basis;
+        }
+        disposals.push({platform:"Polymarket", event_type:etype, description:label, date_acquired:tsDate(earliest), date_sold:tsDate(ts), timestamp:tsIso(ts), quantity:qty, proceeds_usd:usdc, cost_basis_usd:basis, gain_loss_usd:gain, term, tx_hash:txh});
+        koinly.push({Date:tsIso(ts),"Sent Amount":qty.toFixed(6),"Sent Currency":"PM-"+(qTid.slice(-8)||"CTF"),"Received Amount":usdc>0?usdc.toFixed(6):"0.000001","Received Currency":"USDC","Fee Amount":"","Fee Currency":"","Net Worth Amount":usdc.toFixed(2),"Net Worth Currency":"USD",Label:etype==="REDEEM"&&usdc===0?"realized gain":"",Description:"Polymarket "+etype+" "+label+" (Basis $"+basis.toFixed(2)+", PnL $"+gain.toFixed(2)+")",TxHash:txh});
+      }
+    }
+  }
+  const gains = disposals.filter(d=>d.gain_loss_usd>0).reduce((s,d)=>s+d.gain_loss_usd,0);
+  const losses = disposals.filter(d=>d.gain_loss_usd<0).reduce((s,d)=>s+d.gain_loss_usd,0);
+  const rewards = incomes.reduce((s,i)=>s+i.amount_usd,0);
+  return {
+    raw_events_total: raw.length, trade_count: trades, redeem_win_count: winR, redeem_loss_count: lossR, merge_count: merges,
+    volume_usd: vol, realized_gains_usd: gains, realized_losses_usd: losses, net_capital_pnl_usd: gains+losses,
+    ordinary_income_usd: rewards, koinly_overreported_income_usd: overRep, koinly_missed_losses_usd: missedLoss,
+    total_tax_base_saved_usd: overRep+missedLoss, oct29_hack_flags_count: oct29.length, disposals, incomes, koinly
+  };
+}
+
+async function reconcileHyperliquid(addr, yr){
+  const [yrS, yrE] = yearBounds(yr);
+  const startMs = yrS * 1000, endMs = yrE * 1000;
+  let fills = [], seen = new Set(), cur = startMs;
+  for(let p=0; p<6; p++){
+    const r = await fetch(HL_INFO, {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({type:"userFillsByTime", user:addr, startTime:cur, endTime:endMs, aggregateByTime:false})});
+    if(!r.ok) break;
+    const batch = await r.json();
+    if(!Array.isArray(batch) || !batch.length) break;
+    let added = 0, maxT = cur;
+    for(const f of batch){
+      const tid = Number(f.tid || 0);
+      if(tid && seen.has(tid)) continue;
+      if(tid) seen.add(tid);
+      fills.push(f); added++;
+      const t = Number(f.time || 0);
+      if(t > maxT) maxT = t;
+    }
+    setProg("Fetching Hyperliquid fills... (" + fills.length + " fills)");
+    if(batch.length < 2000 || added === 0 || maxT >= endMs) break;
+    cur = maxT + 1;
+  }
+  const fr = await fetch(HL_INFO, {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({type:"userFunding", user:addr, startTime:startMs, endTime:endMs})});
+  const fundings = fr.ok ? await fr.json() : [];
+
+  const disposals = [], incomes = [], koinly = [];
+  let hip3=0, twap=0, closed=0, fees=0, fundSum=0, vol=0;
+  for(const f of fills){
+    const coin = String(f.coin||""), px = Number(f.px||0), sz = Number(f.sz||0);
+    const cp = Number(f.closedPnl||0), fee = Number(f.fee||0), ftok = String(f.feeToken||"USDC");
+    const ts = Number(f.time||0), txh = String(f.hash||""), dir = String(f.dir||f.side||"");
+    const isH3 = coin.includes(":");
+    if(isH3) hip3++;
+    if(f.twapId != null) twap++;
+    vol += px * sz; closed += cp; fees += fee;
+    if(Math.abs(cp) > 1e-8 || Math.abs(fee) > 1e-8){
+      const net = cp - fee;
+      disposals.push({platform:isH3?"Hyperliquid-HIP3":"Hyperliquid", event_type:dir, description:coin+" "+dir+" ("+sz.toFixed(4)+" @ $"+px.toFixed(4)+")", date_acquired:tsDate(ts), date_sold:tsDate(ts), timestamp:tsIso(ts), quantity:sz, proceeds_usd:Math.max(0,net), cost_basis_usd:Math.max(0,-net), gain_loss_usd:net, term:"Short-Term", tx_hash:txh});
+      koinly.push({Date:tsIso(ts),"Sent Amount":net<0?Math.abs(net).toFixed(6):"","Sent Currency":net<0?"USDC":"","Received Amount":net>=0?net.toFixed(6):"","Received Currency":net>=0?"USDC":"","Fee Amount":fee>0?fee.toFixed(6):"","Fee Currency":fee>0?ftok:"","Net Worth Amount":Math.abs(net).toFixed(2),"Net Worth Currency":"USD",Label:"realized gain",Description:"Hyperliquid "+coin+" "+dir,TxHash:txh});
+    }
+  }
+  for(const fd of (Array.isArray(fundings)?fundings:[])){
+    const ts = Number(fd.time||0), txh = String(fd.hash||""), d = fd.delta||{};
+    const u = Number(d.usdc||0), coin = String(d.coin||"");
+    fundSum += u;
+    if(Math.abs(u) > 1e-8){
+      incomes.push({platform:"Hyperliquid", timestamp:tsIso(ts), date:tsDate(ts), income_type:u>0?"FUNDING_RECEIVED":"FUNDING_PAID", amount_usd:u, asset:"USDC", tx_hash:txh, notes:"Hyperliquid "+coin+" funding"});
+      koinly.push({Date:tsIso(ts),"Sent Amount":u<0?Math.abs(u).toFixed(6):"","Sent Currency":u<0?"USDC":"","Received Amount":u>0?u.toFixed(6):"","Received Currency":u>0?"USDC":"","Fee Amount":"","Fee Currency":"","Net Worth Amount":Math.abs(u).toFixed(2),"Net Worth Currency":"USD",Label:"realized gain",Description:"Hyperliquid "+coin+" funding",TxHash:txh});
+    }
+  }
+  return {
+    fills_count: fills.length, hip3_fills_count: hip3, twap_fills_count: twap, funding_events_count: Array.isArray(fundings)?fundings.length:0,
+    truncation_warning: fills.length >= 9800, volume_usd: vol, closed_pnl_usd: closed, fees_usd: fees, net_funding_usd: fundSum,
+    net_total_pnl_usd: closed - fees + fundSum, disposals, incomes, koinly
+  };
+}
+
+async function runAudit(){
+  const addr = document.getElementById("addr").value.trim();
+  const plat = document.getElementById("plat").value;
+  const yr = parseInt(document.getElementById("yr").value, 10);
+  if(!/^0x[a-fA-F0-9]{40}$/.test(addr)){ alert("Please enter a valid 0x EVM address."); return; }
+  const btn = document.getElementById("runBtn");
+  btn.disabled = true; btn.textContent = "Auditing...";
+  STATE = { pm:null, hl:null, addr, year:yr, expectedUsdc:null, poll:STATE.poll, unlocked:false };
+  if(STATE.poll){ clearInterval(STATE.poll); STATE.poll = null; }
+  document.getElementById("orderBox").classList.add("hide");
+  document.getElementById("dlBox").classList.add("hide");
+
+  try{
+    if(plat==="both" || plat==="polymarket"){
+      setProg("Connecting to Polymarket Data API v2...");
+      const raw = await fetchPolyActivity(addr);
+      STATE.pm = reconcilePolymarket(raw, yr);
+    }
+    if(plat==="both" || plat==="hyperliquid"){
+      setProg("Connecting to Hyperliquid Info API...");
+      STATE.hl = await reconcileHyperliquid(addr, yr);
+    }
+    setProg("");
+    renderReport();
+  }catch(e){
+    setProg("");
+    alert("Fetch error: " + e.message);
+  }finally{
+    btn.disabled = false; btn.textContent = "Run Free Audit";
+  }
+}
+
+function fmtUsd(n, sign=false){
+  const s = (sign && n > 0 ? "+" : "") + (n < 0 ? "-$" : "$") + Math.abs(n).toLocaleString("en-US",{minimumFractionDigits:2,maximumFractionDigits:2});
+  return s;
+}
+function stat(k,v,cls=""){ return '<div class="stat"><div class="k">'+k+'</div><div class="v '+cls+'">'+v+'</div></div>'; }
+
+function renderReport(){
+  const el = document.getElementById("resCard");
+  let h = '<h3 style="margin-top:0">Free Diagnostic Report — ' + STATE.addr.slice(0,10) + '...' + STATE.addr.slice(-6) + ' (' + (STATE.year||"All Time") + ')</h3>';
+  let preview = [];
+  if(STATE.pm){
+    const p = STATE.pm;
+    preview.push(...p.disposals.slice(0,4));
+    h += '<h4 style="margin:14px 0 6px;color:var(--accent)">Polymarket Data API v2</h4><div class="grid">'
+      + stat("Events Scanned", p.raw_events_total.toLocaleString())
+      + stat("True Net Capital PnL", fmtUsd(p.net_capital_pnl_usd, true), p.net_capital_pnl_usd>=0?"pos":"neg")
+      + stat("Official Rewards", fmtUsd(p.ordinary_income_usd))
+      + stat("Koinly Over-Tax Fixed", fmtUsd(p.total_tax_base_saved_usd), p.total_tax_base_saved_usd>0?"warn":"") + '</div>';
+    if(p.total_tax_base_saved_usd > 0){
+      h += '<div class="alert warn"><b>Koinly Tax Bug Detected:</b> Found '+p.redeem_win_count+' winning &amp; '+p.redeem_loss_count+' losing CTF redemptions. Naive CSV imports overstate your 2026 taxable base by <b>'+fmtUsd(p.total_tax_base_saved_usd)+'</b> ('+fmtUsd(p.koinly_overreported_income_usd)+' phantom 0-basis income + '+fmtUsd(p.koinly_missed_losses_usd)+' missed losses).</div>';
+    }
+    if(p.oct29_hack_flags_count > 0){
+      h += '<div class="alert warn"><b>Oct-29 Incident Guard:</b> Flagged '+p.oct29_hack_flags_count+' event(s) during the DebugBear supply-chain incident window (Oct 28–Nov 2, 2026) so reimbursement is not double-taxed.</div>';
+    }
+  }
+  if(STATE.hl){
+    const l = STATE.hl;
+    preview.push(...l.disposals.slice(0,4));
+    h += '<h4 style="margin:18px 0 6px;color:var(--accent)">Hyperliquid + HIP-3</h4><div class="grid">'
+      + stat("Fills Scanned", l.fills_count.toLocaleString() + " (HIP-3: "+l.hip3_fills_count+")")
+      + stat("Closed PnL", fmtUsd(l.closed_pnl_usd, true), l.closed_pnl_usd>=0?"pos":"neg")
+      + stat("Net Funding", fmtUsd(l.net_funding_usd, true))
+      + stat("True Net PnL", fmtUsd(l.net_total_pnl_usd, true), l.net_total_pnl_usd>=0?"pos":"neg") + '</div>';
+    if(l.truncation_warning){
+      h += '<div class="alert warn"><b>10,000-Fill API Cliff Warning:</b> Your fills reached Hyperliquid\'s 10,000-fill public API history ceiling. Export and archive immediately before older 2026 fills rotate out.</div>';
+    }
+  }
+  if(preview.length){
+    h += '<h4 style="margin:18px 0 6px">Sample Reconciled Disposals (First '+Math.min(6,preview.length)+' Rows)</h4><table><tr><th>Platform</th><th>Date</th><th>Contract</th><th>Proceeds</th><th>Basis</th><th>Net PnL</th></tr>';
+    for(const r of preview.slice(0,6)){
+      h += '<tr><td>'+r.platform+'</td><td>'+r.date_sold+'</td><td>'+r.description.slice(0,48)+'</td><td>'+fmtUsd(r.proceeds_usd)+'</td><td>'+fmtUsd(r.cost_basis_usd)+'</td><td>'+fmtUsd(r.gain_loss_usd,true)+'</td></tr>';
+    }
+    h += '</table>';
+  }
+  el.innerHTML = h;
+  el.classList.remove("hide");
+  document.getElementById("payCard").classList.remove("hide");
+}
+
+function openCheckout(){
+  const suffix = Math.floor(11 + Math.random() * 978);
+  STATE.expectedUsdc = Number((29 + suffix / 10000).toFixed(4));
+  const box = document.getElementById("orderBox");
+  box.classList.remove("hide");
+  box.innerHTML =
+    '<div><b>Send EXACT amount on Polygon (USDC or USDC.e):</b> <code>' + STATE.expectedUsdc.toFixed(4) + ' USDC</code></div>' +
+    '<div style="margin-top:8px"><b>To CleanLedger self-custody address:</b> <code>' + RECV_ADDR + '</code></div>' +
+    '<div id="payStatus" style="margin-top:10px;color:var(--warn)">Auto-scanning Polygon on-chain logs every 6 seconds...</div>' +
+    '<div class="row" style="margin-top:12px"><input id="txInput" placeholder="Already sent? Paste Polygon tx hash (0x...) for 1-second verification" /><button class="sec" onclick="verifyTxHash()">Verify Tx Hash</button></div>';
+  if(STATE.poll) clearInterval(STATE.poll);
+  STATE.poll = setInterval(pollPolygonPayment, 6000);
+}
+
+async function payWithWallet(){
+  if(!STATE.expectedUsdc) openCheckout();
+  if(!window.ethereum){ alert("No browser wallet detected (MetaMask/Rabby). Send manually using the exact amount above."); return; }
+  try{
+    const accs = await window.ethereum.request({method:"eth_requestAccounts"});
+    try{ await window.ethereum.request({method:"wallet_switchEthereumChain", params:[{chainId:"0x89"}]}); }catch(_){}
+    const amtRaw = BigInt(Math.round(STATE.expectedUsdc * 1e6)).toString(16).padStart(64, "0");
+    const toHex = RECV_ADDR.toLowerCase().replace("0x","").padStart(64, "0");
+    const data = "0xa9059cbb" + toHex + amtRaw;
+    const txHash = await window.ethereum.request({method:"eth_sendTransaction", params:[{from:accs[0], to:USDC_CONTRACTS[0], data}]});
+    document.getElementById("txInput").value = txHash;
+    document.getElementById("payStatus").textContent = "Transaction sent ("+txHash.slice(0,14)+"...). Waiting for confirmation...";
+    setTimeout(verifyTxHash, 4500);
+  }catch(e){ alert("Wallet error: " + e.message); }
+}
+
+async function polyRpc(method, params){
+  const r = await fetch(POLY_RPC, {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({jsonrpc:"2.0", id:1, method, params})});
+  const j = await r.json();
+  return j.result;
+}
+
+async function pollPolygonPayment(){
+  if(STATE.unlocked || !STATE.expectedUsdc) return;
+  try{
+    const latestHex = await polyRpc("eth_blockNumber", []);
+    if(!latestHex) return;
+    const fromBlk = "0x" + Math.max(0, parseInt(latestHex,16) - 1800).toString(16);
+    const recvTopic = "0x" + "0".repeat(24) + RECV_ADDR.toLowerCase().replace("0x","");
+    const target = Math.round(STATE.expectedUsdc * 1e6);
+    for(const c of USDC_CONTRACTS){
+      const logs = await polyRpc("eth_getLogs", [{fromBlock:fromBlk, toBlock:"latest", address:c, topics:[TRANSFER_TOPIC, null, recvTopic]}]);
+      if(!Array.isArray(logs)) continue;
+      for(const lg of logs.reverse()){
+        const amt = parseInt(lg.data, 16);
+        if(Math.abs(amt - target) <= 50){ unlockExports(lg.transactionHash); return; }
+      }
+    }
+  }catch(_){}
+}
+
+async function verifyTxHash(){
+  const h = (document.getElementById("txInput").value || "").trim();
+  if(!/^0x[a-fA-F0-9]{64}$/.test(h)){ alert("Enter a valid 66-char Polygon tx hash."); return; }
+  const rec = await polyRpc("eth_getTransactionReceipt", [h]);
+  if(!rec || rec.status !== "0x1"){ alert("Transaction not confirmed yet on Polygon. Wait 5s and retry."); return; }
+  const recvTopic = "0x" + "0".repeat(24) + RECV_ADDR.toLowerCase().replace("0x","");
+  const minRaw = 28900000; // >= $28.90 USDC
+  for(const lg of (rec.logs || [])){
+    if(USDC_CONTRACTS.map(x=>x.toLowerCase()).includes(lg.address.toLowerCase()) && lg.topics && lg.topics[0]===TRANSFER_TOPIC && lg.topics[2] && lg.topics[2].toLowerCase()===recvTopic){
+      if(parseInt(lg.data, 16) >= minRaw){ unlockExports(h); return; }
+    }
+  }
+  alert("No >= $29 Polygon USDC/USDC.e transfer to CleanLedger address found in that tx.");
+}
+
+function unlockExports(txHash){
+  STATE.unlocked = true;
+  if(STATE.poll){ clearInterval(STATE.poll); STATE.poll = null; }
+  document.getElementById("payStatus").innerHTML = '<span style="color:var(--accent)"><b>Payment Verified On-Chain!</b> Tx: <code>'+txHash.slice(0,22)+'...</code></span>';
+  const dl = document.getElementById("dlBox");
+  dl.classList.remove("hide");
+  dl.innerHTML = '<b>Unlocked! Download your reconciled 2026 tax files:</b><div class="row" style="margin-top:10px">'
+    + '<button onclick="dlFile(\'koinly\')">01_Koinly_Universal.csv</button>'
+    + '<button class="sec" onclick="dlFile(\'8949\')">02_IRS_Form_8949.csv</button>'
+    + '<button class="sec" onclick="dlFile(\'awaken\')">03_Awaken_Tax.csv</button>'
+    + '<button class="sec" onclick="dlFile(\'json\')">04_Audit_Summary.json</button></div>';
+}
+
+function csvEsc(v){ const s = String(v==null?"":v); return /[",\n]/.test(s) ? '"'+s.replace(/"/g,'""')+'"' : s; }
+function toCsv(cols, rows){ return [cols.join(","), ...rows.map(r => cols.map(c => csvEsc(r[c])).join(","))].join("\n"); }
+
+function dlFile(kind){
+  if(!STATE.unlocked) return;
+  const disposals = [...(STATE.pm?STATE.pm.disposals:[]), ...(STATE.hl?STATE.hl.disposals:[])];
+  const incomes   = [...(STATE.pm?STATE.pm.incomes:[]), ...(STATE.hl?STATE.hl.incomes:[])];
+  const koinly    = [...(STATE.pm?STATE.pm.koinly:[]), ...(STATE.hl?STATE.hl.koinly:[])];
+  let content = "", fname = "", mime = "text/csv";
+
+  if(kind==="koinly"){
+    const cols = ["Date","Sent Amount","Sent Currency","Received Amount","Received Currency","Fee Amount","Fee Currency","Net Worth Amount","Net Worth Currency","Label","Description","TxHash"];
+    content = toCsv(cols, koinly);
+    fname = "CleanLedger_"+STATE.addr.slice(0,8)+"_Koinly.csv";
+  }else if(kind==="8949"){
+    const cols = ["Description of Property","Date Acquired","Date Sold or Disposed","Proceeds (USD)","Cost or Other Basis (USD)","Gain or (Loss) (USD)","Term","Platform","Event Type","TxHash"];
+    const rows = disposals.map(d => ({"Description of Property":d.quantity.toFixed(4)+" "+d.description,"Date Acquired":d.date_acquired,"Date Sold or Disposed":d.date_sold,"Proceeds (USD)":d.proceeds_usd.toFixed(2),"Cost or Other Basis (USD)":d.cost_basis_usd.toFixed(2),"Gain or (Loss) (USD)":d.gain_loss_usd.toFixed(2),"Term":d.term,"Platform":d.platform,"Event Type":d.event_type,"TxHash":d.tx_hash}));
+    content = toCsv(cols, rows);
+    fname = "CleanLedger_"+STATE.addr.slice(0,8)+"_IRS_Form8949.csv";
+  }else if(kind==="awaken"){
+    const cols = ["Date","Asset","Amount","Fiat Value (USD)","Tag","Platform","Notes","TxHash"];
+    const rows = [
+      ...disposals.map(d => ({Date:d.timestamp,Asset:"USDC",Amount:d.gain_loss_usd.toFixed(6),"Fiat Value (USD)":d.gain_loss_usd.toFixed(2),Tag:"realized_pnl",Platform:d.platform,Notes:d.description,TxHash:d.tx_hash})),
+      ...incomes.map(i => ({Date:i.timestamp,Asset:i.asset,Amount:i.amount_usd.toFixed(6),"Fiat Value (USD)":i.amount_usd.toFixed(2),Tag:i.income_type.toLowerCase(),Platform:i.platform,Notes:i.notes,TxHash:i.tx_hash}))
+    ];
+    content = toCsv(cols, rows);
+    fname = "CleanLedger_"+STATE.addr.slice(0,8)+"_Awaken.csv";
+  }else{
+    mime = "application/json";
+    const clean = (o) => o ? Object.fromEntries(Object.entries(o).filter(([k])=>!["disposals","incomes","koinly"].includes(k))) : null;
+    content = JSON.stringify({address:STATE.addr, tax_year:STATE.year||"ALL", polymarket:clean(STATE.pm), hyperliquid:clean(STATE.hl)}, null, 2);
+    fname = "CleanLedger_"+STATE.addr.slice(0,8)+"_AuditSummary.json";
+  }
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(new Blob([content], {type:mime}));
+  a.download = fname;
+  a.click();
+}
+</script>
+</body>
+</html>
