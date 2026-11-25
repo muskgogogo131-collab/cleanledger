@@ -6,7 +6,9 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 import sqlite3
+import subprocess
 import threading
 import time
 
@@ -15,6 +17,42 @@ import tax_engine
 
 log = logging.getLogger("cleanledger.archiver")
 _STARTED = False
+TG_SEND = os.path.expanduser("~/bin/tg-send")
+
+
+def _check_incoming_sales():
+    """Watch Polygon USDC/USDC.e transfers >= $25 into our self-custody wallet and notify Telegram."""
+    try:
+        latest_hex = payments._poly_rpc("eth_blockNumber", [])
+        if not latest_hex:
+            return
+        latest = int(latest_hex, 16)
+        from_blk = hex(max(0, latest - 1800))
+        recv_topic = "0x" + "0" * 24 + payments.POLYGON_RECV_ADDR.lower().replace("0x", "")
+        conn = sqlite3.connect(payments.DB_PATH, timeout=15)
+        conn.execute("CREATE TABLE IF NOT EXISTS seen_sales (tx_hash TEXT PRIMARY KEY, ts INTEGER, usdc REAL)")
+        for contract in payments.POLYGON_USDC_CONTRACTS:
+            logs = payments._poly_rpc("eth_getLogs", [{
+                "fromBlock": from_blk, "toBlock": "latest",
+                "address": contract,
+                "topics": [payments.TRANSFER_TOPIC, None, recv_topic],
+            }])
+            if not isinstance(logs, list):
+                continue
+            for lg in logs:
+                txh = str(lg.get("transactionHash") or "")
+                amt_usdc = int(lg["data"], 16) / 1_000_000.0
+                if not txh or amt_usdc < 25.0:
+                    continue
+                cur = conn.execute("INSERT OR IGNORE INTO seen_sales (tx_hash, ts, usdc) VALUES (?, ?, ?)", (txh, int(time.time()), amt_usdc))
+                if cur.rowcount > 0:
+                    log.info("NEW SALE RECEIVED: +%.4f USDC (tx=%s)", amt_usdc, txh)
+                    if os.path.exists(TG_SEND):
+                        subprocess.run([TG_SEND, f"CleanLedger 新成交到账：+{amt_usdc:.2f} USDC（Polygon 链上实收，交易哈希 {txh[:18]}...）"], timeout=15, check=False)
+        conn.commit()
+        conn.close()
+    except Exception as e:
+        log.debug("Sales watcher err: %s", e)
 
 
 def sync_one_wallet(address: str) -> int:
@@ -48,6 +86,7 @@ def sync_one_wallet(address: str) -> int:
 
 def _loop():
     while True:
+        _check_incoming_sales()
         try:
             now = int(time.time())
             conn = sqlite3.connect(payments.DB_PATH, timeout=15)
